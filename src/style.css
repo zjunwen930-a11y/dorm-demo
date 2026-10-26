@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 全局基础样式：清新校园低碳风 */
+body {
+  @apply bg-cream text-gray-800 antialiased;
+}
+
+/* 通用卡片样式 */
+.card {
+  @apply bg-white rounded-2xl shadow-sm hover:shadow-md transition p-4;
+}
+
+/* 主按钮 */
+.btn-primary {
+  @apply inline-block bg-mint-500 text-white px-5 py-2.5 rounded-full font-medium hover:bg-mint-600 transition text-center;
+}
+
+.btn-ghost {
+  @apply inline-block border border-mint-400 text-mint-600 px-5 py-2.5 rounded-full font-medium hover:bg-mint-50 transition text-center;
+}
