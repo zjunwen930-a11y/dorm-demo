@@ -1,0 +1,12 @@
+# 依赖：体积大且含损坏的链接，必须云端重新安装
+node_modules/
+
+# 构建产物：由 Netlify 自动生成
+dist/
+
+# 密钥文件：不上传
+.env
+
+# 系统杂项
+.DS_Store
+Thumbs.db
