@@ -9,6 +9,8 @@
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { createAvatar } from '../three/avatar'
 import { createPet } from '../three/pet'
 
@@ -20,6 +22,12 @@ const emit = defineEmits(['pick'])
 const container = ref(null)
 const activeZone = ref(null)
 const themeIndex = ref(0)
+const modelStatus = ref('loading')
+const upgradedFurniture = ref(true)
+const webglError = ref(false)
+let isDisposed = false
+let originalChair, modelChair, resizeObserver
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const activityText = ref('在家里发呆')     // 当前小人状态（给 UI 显示）
 
 let renderer, scene, camera, controls, raycaster, pointer
@@ -107,11 +115,12 @@ const ANCHORS = {
   playB:  { pos: [-0.35, 0.3, 2.1],   rotY: 2.3,  rotZ: 0,    action: 'dance', text: '和好友一起玩' },
 }
 
-const M = (color) => new THREE.MeshLambertMaterial({ color })
+const M = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0 })
 const EM = (color, intensity = 0.9) => new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: intensity })
 
 function box(w, h, d, color, x, y, z, parent, cast = true) {
-  const g = new THREE.BoxGeometry(w, h, d); const mat = M(color)
+  const radius = Math.min(w, h, d, 0.14) * 0.16
+  const g = new RoundedBoxGeometry(w, h, d, 2, radius); const mat = M(color)
   const m = new THREE.Mesh(g, mat); m.position.set(x, y, z)
   m.castShadow = cast; m.receiveShadow = cast
   ;(parent || scene).add(m); disposables.push(g, mat); return m
@@ -145,7 +154,9 @@ function buildRoom() {
   const floor = box(7, 0.25, 6, THEMES[0].floor, 0, 0.125, 0); R.floor = floor.material
   R.wallA = box(7, 3.2, 0.25, THEMES[0].wall, 0, 1.72, -3).material
   R.wallB = box(0.25, 3.2, 6, THEMES[0].wall, -3.5, 1.72, 0).material
-  box(7, 0.18, 6, '#ffffff', 0, 3.35, 0)
+  // Open cutaway: the former solid ceiling hid the furniture from above.
+  box(7, 0.09, 0.3, '#ffffff', 0, 3.35, -3)
+  box(0.3, 0.09, 6, '#ffffff', -3.5, 3.35, 0)
 
   // 地板拼缝（细节）
   for (let i = -2; i <= 2; i++) {
@@ -216,6 +227,7 @@ function buildRoom() {
   box(0.06, 0.42, 0.06, '#c9a06a', 0.16, 0.21, -0.16, chair)
   box(0.42, 0.4, 0.05, '#d8b98a', 0, 0.62, 0.19, chair)
   chair.position.set(1.32, 0.25, -1.1); scene.add(chair)
+  originalChair = chair
 
   // 床头柜 + 台灯
   const ns = new THREE.Group()
@@ -265,7 +277,7 @@ function buildRoom() {
   controls.minDistance = 4; controls.maxDistance = 14
   controls.maxPolarAngle = Math.PI / 2.1
   controls.target.set(0, 1, 0)
-  controls.autoRotate = true
+  controls.autoRotate = !reducedMotion
   controls.autoRotateSpeed = 0.8
   renderer.domElement.addEventListener('pointerdown', () => { controls.autoRotate = false }, { once: true })
 
@@ -428,7 +440,8 @@ function rebuildDecor(t) {
 
 /* ================= 主题 ================= */
 function applyTheme(i) {
-  const t = THEMES[((i % THEMES.length) + THEMES.length) % THEMES.length]
+  const index = Number.isFinite(Number(i)) ? Math.trunc(Number(i)) : 0
+  const t = THEMES[((index % THEMES.length) + THEMES.length) % THEMES.length]
   themeIndex.value = THEMES.indexOf(t)
   localStorage.setItem('dorm-theme', String(themeIndex.value))
   if (!scene) return
@@ -497,6 +510,7 @@ function scheduleActivity(t) {
 
 /* ================= 对外 API ================= */
 function inviteFriend(name = '好友') {
+  if (!scene) return false
   if (!friend) {
     friend = createAvatar({ skin: '#ffe0c4', hair: '#6b4a2f', shirt: '#f7b2c0', pants: '#7f8fc9' })
     friend.group.scale.setScalar(0.95)
@@ -510,6 +524,7 @@ function inviteFriend(name = '好友') {
 }
 
 function playTogether() {
+  if (!scene) return false
   if (!friend) inviteFriend(friendLabel.value || '好友')
   placeAvatar(me, 'playA')
   placeAvatar(friend, 'playB')
@@ -520,6 +535,7 @@ function playTogether() {
 }
 
 function spawnBaby() {
+  if (!scene) return false
   if (baby) return true
   baby = createAvatar({ skin: '#ffe3cb', hair: '#5b3a26', shirt: '#fff0b3', pants: '#ffd1dc', scale: 0.55 })
   baby.group.position.set(-0.2, 0.28, 1.2)
@@ -537,13 +553,14 @@ function removeFriend() {
 
 /** 随机开盲盒 */
 function randomTheme() {
+  if (!scene) return null
   let i = Math.floor(Math.random() * THEMES.length)
   if (i === themeIndex.value) i = (i + 1) % THEMES.length
   const t = applyTheme(i)
   burst()
-  controls.autoRotate = true
+  controls.autoRotate = !reducedMotion
   controls.autoRotateSpeed = 2.4
-  setTimeout(() => { controls.autoRotateSpeed = 0.8 }, 2600)
+  setTimeout(() => { if (!isDisposed) controls.autoRotateSpeed = 0.8 }, 2600)
   return { name: t.name, desc: t.desc }
 }
 
@@ -650,7 +667,8 @@ function animate(tms) {
 }
 
 onMounted(() => {
-  renderer = new THREE.WebGLRenderer({ antialias: true })
+  try { renderer = new THREE.WebGLRenderer({ antialias: true }) }
+  catch { webglError.value = true; return }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
   renderer.shadowMap.enabled = true
@@ -666,6 +684,7 @@ onMounted(() => {
 
   buildRoom()
   buildLux()
+  loadFurniture()
   applyTheme(Number(localStorage.getItem('dorm-theme') ?? 0))
 
   // 主角小人
@@ -683,33 +702,92 @@ onMounted(() => {
   scene.add(dog.group)
 
   animate(0)
-  window.addEventListener('resize', onResize)
+  resizeObserver = new ResizeObserver(onResize)
+  resizeObserver.observe(container.value)
 })
 
 function onResize() {
-  if (!container.value) return
+  if (!container.value || !renderer || !camera) return
   camera.aspect = container.value.clientWidth / container.value.clientHeight
   camera.updateProjectionMatrix()
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
 }
 
+function syncFurniture() {
+  if (originalChair) originalChair.visible = !modelChair || !upgradedFurniture.value
+  if (modelChair) modelChair.visible = upgradedFurniture.value
+}
+watch(upgradedFurniture, syncFurniture)
+
+async function loadFurniture() {
+  try {
+    const gltf = await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/kenney/chair-rounded.glb`)
+    if (isDisposed) { disposeScene(gltf.scene); return }
+    const root = gltf.scene
+    const bounds = new THREE.Box3().setFromObject(root)
+    const size = bounds.getSize(new THREE.Vector3())
+    // Uniform scale keeps the original proportions; bottom-align with the floor.
+    const scale = 0.82 / size.y
+    root.scale.setScalar(scale)
+    const fitted = new THREE.Box3().setFromObject(root)
+    const center = fitted.getCenter(new THREE.Vector3())
+    root.position.set(1.32 - center.x, 0.25 - fitted.min.y, -1.1 - center.z)
+    root.traverse(o => {
+      if (!o.isMesh) return
+      o.castShadow = true; o.receiveShadow = true
+      const mats = Array.isArray(o.material) ? o.material : [o.material]
+      mats.forEach(m => { m.roughness = 0.85; m.color.set(THEMES[themeIndex.value].wood); R.wood.push(m) })
+    })
+    modelChair = root
+    scene.add(root)
+    syncFurniture()
+    modelStatus.value = 'ready'
+  } catch {
+    // Keep the original chair and every hotspot when the local asset is unavailable.
+    modelStatus.value = 'fallback'
+  }
+}
+
+function disposeScene(root) {
+  const geometries = new Set(), materials = new Set(), textures = new Set()
+  root?.traverse(o => {
+    if (!o.isMesh) return
+    geometries.add(o.geometry)
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      materials.add(m)
+      for (const value of Object.values(m)) if (value?.isTexture) textures.add(value)
+    }
+  })
+  textures.forEach(t => t.dispose())
+  materials.forEach(m => m.dispose())
+  geometries.forEach(g => g.dispose())
+}
+
 onBeforeUnmount(() => {
+  isDisposed = true
   cancelAnimationFrame(rafId)
-  window.removeEventListener('resize', onResize)
-  disposables.forEach(d => d.dispose())
-  if (decorGroup) disposeGroup(decorGroup)
+  resizeObserver?.disconnect()
+  controls?.dispose()
+  disposeScene(scene)
   renderer?.dispose()
 })
 </script>
 
 <template>
-  <div class="relative w-full h-full">
-    <div ref="container" class="w-full h-full rounded-3xl overflow-hidden touch-none shadow-sm" />
+  <div class="relative w-full h-full room-view">
+    <div ref="container" class="w-full h-full overflow-hidden touch-none" aria-label="可旋转的 3D 宿舍" />
 
+    <div v-if="webglError" class="absolute inset-0 grid place-content-center text-center px-8 bg-[#e9eddf]">
+      <p class="text-lg font-medium">在这里，寻找小空间的灵感</p><p class="text-xs text-gray-500 mt-3">当前设备暂不支持 3D 展示，请使用下方分区按钮浏览好物。</p>
+    </div>
+    <div class="absolute left-3 bottom-24 sm:bottom-14 flex flex-wrap items-center gap-2 text-[10px] text-gray-600 bg-white/85 rounded-md px-2 py-1">
+      <span>{{ modelStatus === 'ready' ? 'Kenney 家具 · CC0' : modelStatus === 'loading' ? '家具细节加载中' : '使用基础家具' }}</span>
+      <button v-if="modelStatus === 'ready'" @click="upgradedFurniture = !upgradedFurniture" :aria-pressed="upgradedFurniture" class="underline underline-offset-2">{{ upgradedFurniture ? '对比原版' : '查看升级' }}</button>
+    </div>
     <!-- 风格切换 -->
     <div class="absolute top-3 right-3 flex flex-col gap-1 items-end max-h-[62%] overflow-y-auto">
-      <span class="text-[10px] bg-white/85 backdrop-blur px-2.5 py-1 rounded-full text-gray-500 shrink-0">🎁 宿舍风格</span>
-      <button v-for="(t, i) in themes" :key="i" @click="setTheme(i)"
+      <span class="text-[10px] bg-white/85 backdrop-blur px-2.5 py-1 rounded-full text-gray-500 shrink-0">宿舍风格</span>
+      <button v-for="(t, i) in THEMES" :key="i" @click="applyTheme(i)" :aria-pressed="themeIndex === i"
         class="text-[11px] px-2.5 py-1 rounded-full backdrop-blur border transition shrink-0"
         :class="themeIndex === i ? 'bg-mint-500 text-white border-mint-500' : 'bg-white/85 border-white text-gray-500'">
         {{ t.name }}
@@ -718,7 +796,7 @@ onBeforeUnmount(() => {
 
     <!-- 状态气泡 -->
     <div class="absolute top-3 left-3 text-xs bg-white/85 backdrop-blur px-3 py-1.5 rounded-full text-gray-600">
-      💬 小人正在：{{ activityText }}
+      正在：{{ activityText }}
     </div>
 
     <!-- 底部热区 -->
@@ -732,3 +810,7 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.room-view :deep(canvas) { display: block; }
+</style>

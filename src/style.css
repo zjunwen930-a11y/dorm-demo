@@ -2,21 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 全局基础样式：清新校园低碳风 */
-body {
-  @apply bg-cream text-gray-800 antialiased;
+@layer base {
+  :root { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #253c34; background: #f6f5f0; font-synthesis: none; }
+  body { @apply antialiased; margin: 0; }
+  * { box-sizing: border-box; }
+  ::selection { background: #cfdfd1; }
+  button, input, select, textarea { font: inherit; }
+  button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+  button:not(:disabled), select { cursor: pointer; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid #b77843; outline-offset: 4px; }
+  img { max-width: 100%; }
+  h1, h2, h3 { text-wrap: balance; }
+  [id] { scroll-margin-top: 100px; }
 }
-
-/* 通用卡片样式 */
-.card {
-  @apply bg-white rounded-2xl shadow-sm hover:shadow-md transition p-4;
+@layer components {
+  .card { @apply bg-white p-5; border: 1px solid #e2e6de; border-radius: 16px; box-shadow: 0 3px 15px #253c3404; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-medium text-white transition; background: #284f40; border: 1px solid #284f40; border-radius: 8px; }
+  .btn-primary:hover { background: #193b2e; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-medium transition; color: #284f40; border: 1px solid #b8c9bb; border-radius: 8px; background: transparent; }
+  .btn-ghost:hover { background: #edf2e9; }
+  .eyebrow { font-size: 10px; letter-spacing: .2em; font-weight: 600; color: #718476; text-transform: uppercase; }
+  .section-title { @apply text-xl md:text-2xl font-semibold; color: #253c34; letter-spacing: -.04em; }
+  .page-shell { @apply mx-auto px-5 md:px-8; max-width: 1200px; }
+  .empty-state { @apply text-center py-12 px-5 text-sm; border: 1px dashed #cad6c9; border-radius: 12px; color: #718476; background: #f9faf6; }
 }
-
-/* 主按钮 */
-.btn-primary {
-  @apply inline-block bg-mint-500 text-white px-5 py-2.5 rounded-full font-medium hover:bg-mint-600 transition text-center;
-}
-
-.btn-ghost {
-  @apply inline-block border border-mint-400 text-mint-600 px-5 py-2.5 rounded-full font-medium hover:bg-mint-50 transition text-center;
+.fade-enter-active, .fade-leave-active { transition: opacity .2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
