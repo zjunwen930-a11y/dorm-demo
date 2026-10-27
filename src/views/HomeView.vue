@@ -49,6 +49,7 @@ const zoneLabel = ref('')
 const stats = ref({ posts: 0, products: 0, carbon: 0 })
 // 积分排行榜前 5 名
 const leaders = ref([])
+const dataError = ref(false)
 // 最新上架的 4 件改造商品
 const latest = ref([])
 
@@ -88,6 +89,7 @@ onMounted(async () => {
     user.value ? supabase.from('orders').select('id', { count: 'exact', head: true }).eq('buyer', user.value.id)
                : Promise.resolve({ count: 0 }),
   ])
+  dataError.value = [p1, p2, p3, p4, p5].some(p => p.error)
   const posts = p1.count ?? 0
   stats.value = {
     posts,
@@ -113,190 +115,158 @@ function levelName(points) {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto px-4 py-6">
-    <!-- Hero 标语 -->
-    <section class="text-center mb-6">
-      <h1 class="text-2xl md:text-4xl font-bold text-mint-700">让闲置醒来，让宿舍焕新 🌿</h1>
-      <p class="text-gray-500 mt-2 text-sm md:text-base">校园闲置回收 × DIY 改造 —— 低碳生活，从宿舍开始</p>
-    </section>
-
-    <!-- 公益数据统计条 -->
-    <section class="grid grid-cols-3 gap-3 mb-6">
-      <div class="card !p-3 text-center">
-        <p class="text-xl md:text-2xl font-bold text-mint-600">{{ stats.posts }}</p>
-        <p class="text-xs text-gray-500 mt-1">回收闲置（件）</p>
+  <div class="page-shell pb-4">
+    <section class="home-intro">
+      <div>
+        <p class="eyebrow mb-5">CAMPUS CIRCULAR LIVING · 校园循环计划</p>
+        <h1>旧物的新故事，<br />从你的<span>小空间</span>开始。</h1>
+        <p class="intro-copy">回收一件闲置，发现一份改造灵感。<br class="hidden sm:block" />和校园里的创作者一起，让喜欢的生活慢慢发生。</p>
+        <div class="flex flex-wrap gap-3 mt-7">
+          <router-link to="/shop" class="btn-primary">发现改造好物 <span aria-hidden="true">↗</span></router-link>
+          <router-link to="/recycle" class="btn-ghost">投稿我的闲置</router-link>
+        </div>
       </div>
-      <div class="card !p-3 text-center">
-        <p class="text-xl md:text-2xl font-bold text-mint-600">{{ stats.products }}</p>
-        <p class="text-xs text-gray-500 mt-1">改造好物（件）</p>
-      </div>
-      <div class="card !p-3 text-center">
-        <p class="text-xl md:text-2xl font-bold text-mint-600">{{ stats.carbon }}kg</p>
-        <p class="text-xs text-gray-500 mt-1">累计减碳（估算）</p>
+      <div class="intro-note">
+        <span class="note-index">01 / RENEW YOUR ROOM</span>
+        <p>物尽其用。<br />生活常新。</p>
+        <span class="note-bottom">从一盏灯、一张椅子开始 ↙</span>
       </div>
     </section>
 
-    <!-- 盲盒解锁提示 -->
+    <p v-if="dataError" role="status" class="text-xs text-gray-500 mb-4">校园数据暂时无法获取，统计与好物列表待连接恢复后更新。家园互动仍可体验。</p>
+    <section class="impact-strip" aria-label="校园循环数据">
+      <div><strong>{{ dataError ? '—' : stats.posts }}</strong><span>件闲置重新出发</span></div>
+      <div><strong>{{ dataError ? '—' : stats.products }}</strong><span>件好物等待相遇</span></div>
+      <div><strong>{{ dataError ? '—' : stats.carbon }}<small> kg</small></strong><span>估算减碳 · 每件回收按 5 kg 计</span></div>
+    </section>
+
     <Transition name="fade">
-      <div v-if="boxToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-mint-600 text-white px-5 py-3 rounded-2xl shadow-lg text-center max-w-[90vw]">
-        <p class="text-sm font-bold">🎁 盲盒开启：{{ boxToast.name }}</p>
-        <p class="text-xs text-mint-100 mt-0.5">{{ boxToast.desc }}</p>
+      <div v-if="boxToast" role="status" class="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-mint-700 text-white px-5 py-4 rounded-xl shadow-lg text-center w-max max-w-[90vw]">
+        <p class="text-sm font-bold">盲盒开启：{{ boxToast.name }}</p>
+        <p class="text-xs text-mint-100 mt-1">{{ boxToast.desc }}</p>
       </div>
     </Transition>
 
-    <!-- 3D 宿舍家园 + 好友互动面板 -->
-    <section class="grid lg:grid-cols-3 gap-4">
-      <div class="lg:col-span-2 h-[420px] md:h-[520px]">
-        <Dorm3D ref="dormRef" :level="homeLevel" @pick="openZone" />
+    <section class="mt-12" aria-labelledby="room-heading">
+      <div class="section-heading">
+        <div><p class="eyebrow mb-2">YOUR LITTLE CORNER</p><h2 id="room-heading" class="section-title">把灵感，放进家里</h2></div>
+        <p class="text-xs text-gray-500">拖动旋转 · 点击家具发现同区好物</p>
       </div>
-
-      <!-- 右侧：好友邀请 / 亲密度 / 家园成长 -->
-      <aside class="space-y-3">
-        <!-- 家园等级 -->
-        <div class="card !p-4">
-          <div class="flex items-center justify-between">
-            <h3 class="font-bold text-mint-700 text-sm">🏠 我的家园</h3>
-            <span class="text-[11px] px-2 py-0.5 rounded-full bg-mint-100 text-mint-700">Lv.{{ homeLevel }}</span>
-          </div>
-          <p class="text-xs text-gray-500 mt-1.5">
-            已购买 <b class="text-mint-600">{{ orderCount }}</b> 件二手好物
-          </p>
-          <div class="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div class="h-full bg-mint-400 transition-all" :style="{ width: Math.min(100, orderCount / 5 * 100) + '%' }"></div>
-          </div>
-          <p class="text-[11px] text-gray-400 mt-1.5">
-            买 1 件解锁落地灯 · 3 件解锁沙发挂画 · 5 件解锁吊灯抱枕
-          </p>
-        </div>
-
-        <!-- 好友邀请 -->
-        <div class="card !p-4">
-          <h3 class="font-bold text-mint-700 text-sm">🤝 双人家园</h3>
-          <p class="text-[11px] text-gray-400 mt-1 mb-2">通过「平台转赠」结识的同学，可以邀请来家里一起玩</p>
-          <div class="space-y-1.5">
-            <button v-for="f in DEMO_FRIENDS" :key="f" @click="invite(f)"
-              class="w-full flex items-center justify-between text-xs px-3 py-2 rounded-xl border transition"
-              :class="friendName === f ? 'border-mint-500 bg-mint-50 text-mint-700' : 'border-gray-200 text-gray-600 hover:bg-mint-50'">
-              <span class="truncate">{{ friendName === f ? '✅ ' : '➕ ' }}{{ f }}</span>
-              <span class="text-[10px] text-gray-400 shrink-0">邀请</span>
+      <div class="room-layout">
+        <div class="room-stage"><Dorm3D ref="dormRef" :level="homeLevel" @pick="openZone" /></div>
+        <aside class="room-panel">
+          <div class="flex items-center justify-between"><p class="eyebrow">MY DORM</p><span class="level-label">Lv.{{ homeLevel }}</span></div>
+          <h3 class="text-2xl font-semibold mt-3">我的焕新家园</h3>
+          <p class="text-xs text-gray-500 mt-2 leading-6">已提交 {{ orderCount }} 件好物的购买意向<br />每一次循环，都让小屋多一点温度。</p>
+          <div class="mt-4 h-1 bg-[#e1e5da] overflow-hidden"><div class="h-full bg-mint-600" :style="{ width: Math.min(100, orderCount / 5 * 100) + '%' }"></div></div>
+          <p class="text-[11px] text-gray-500 mt-2 leading-5">1 件 · 落地灯 / 3 件 · 沙发挂画 / 5 件 · 吊灯抱枕</p>
+          <div class="panel-divider"></div>
+          <div class="flex justify-between items-center"><h3 class="text-sm font-semibold">邀请伙伴来坐坐</h3><span class="text-[10px] text-gray-500">演示互动</span></div>
+          <div class="space-y-2 mt-3">
+            <button v-for="f in DEMO_FRIENDS" :key="f" @click="invite(f)" class="friend-button" :class="{ selected: friendName === f }">
+              <span>{{ f }}</span><span>{{ friendName === f ? '已邀请 ✓' : '邀请 ↗' }}</span>
             </button>
           </div>
-
           <div class="flex gap-2 mt-3">
-            <button class="flex-1 text-xs bg-mint-500 text-white rounded-full py-2 hover:bg-mint-600" @click="playTogether">🎮 一起玩 +10</button>
-            <button class="flex-1 text-xs border border-mint-400 text-mint-600 rounded-full py-2 hover:bg-mint-50" @click="playTogether">🐾 逗猫 +10</button>
+            <button class="btn-primary flex-1 !px-2 !py-2.5 !text-xs" @click="playTogether">一起玩 +10</button>
+            <button class="btn-ghost flex-1 !px-2 !py-2.5 !text-xs" @click="playTogether">逗猫 +10</button>
           </div>
-
-          <!-- 亲密度 -->
-          <div class="mt-3">
-            <div class="flex justify-between text-[11px] text-gray-500 mb-1">
-              <span>与 {{ friendName || '好友' }} 的亲密度</span>
-              <span class="text-mint-600 font-medium">{{ intimacy }} / 100</span>
-            </div>
-            <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div class="h-full bg-gradient-to-r from-mint-300 to-mint-500 transition-all" :style="{ width: Math.min(100, intimacy) + '%' }"></div>
-            </div>
-            <p class="text-[11px] text-gray-400 mt-1.5">
-              {{ hasBaby ? '💕 已解锁「小屋新成员」' : '亲密度满 100 解锁「小屋新成员」彩蛋' }}
-            </p>
-            <button :disabled="!hasBaby" @click="makeBaby"
-              class="mt-2 w-full text-xs rounded-full py-2 transition"
-              :class="hasBaby ? 'bg-amber-400 text-white hover:bg-amber-500' : 'bg-gray-100 text-gray-400 cursor-not-allowed'">
-              👶 小屋新成员
-            </button>
-          </div>
-        </div>
-      </aside>
+          <div class="flex justify-between text-[11px] text-gray-500 mt-4"><span>伙伴亲密度</span><span>{{ intimacy }} / 100</span></div>
+          <div class="mt-2 h-1 bg-[#e1e5da]"><div class="h-full bg-[#bd8d60]" :style="{ width: Math.min(100, intimacy) + '%' }"></div></div>
+          <button :disabled="!hasBaby" @click="makeBaby" class="mt-3 text-xs text-mint-700 underline underline-offset-4">{{ hasBaby ? '迎接小屋新成员 ↗' : '亲密度满 100，解锁小屋新成员' }}</button>
+        </aside>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">家园彩蛋 / 在商城提交购买意向后，回到这里开启一款随机宿舍风格。</p>
     </section>
 
-    <p class="text-center text-xs text-gray-400 mt-2">🎁 小彩蛋：在商城提交购买意向后，回到首页会自动解锁一款随机宿舍皮肤</p>
-
-    <!-- 常规导航按钮：3D 不是唯一入口 -->
-    <section class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
-      <router-link to="/recycle" class="btn-primary">♻️ 我要回收闲置</router-link>
-      <router-link to="/shop" class="btn-ghost">🛒 全部改造商城</router-link>
-      <a href="#about" class="btn-ghost">🌱 关于项目</a>
-    </section>
-
-    <!-- 最新改造推荐 + 环保积分榜 -->
-    <section class="grid md:grid-cols-3 gap-4 mt-8">
-      <!-- 最新改造 -->
+    <section class="mt-14 grid md:grid-cols-3 gap-8">
       <div class="md:col-span-2">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="font-bold text-mint-700">🆕 最新上架</h2>
-          <router-link to="/shop" class="text-xs text-mint-600 hover:underline">查看全部 →</router-link>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <router-link v-for="p in latest" :key="p.id" to="/shop" class="card !p-3 flex items-center gap-3 hover:-translate-y-0.5 transition">
-            <img v-if="p.image_after" :src="p.image_after" class="w-14 h-14 rounded-xl object-cover shrink-0" />
-            <div v-else class="w-14 h-14 bg-mint-100 rounded-xl grid place-items-center shrink-0">🌿</div>
-            <div class="min-w-0">
-              <p class="text-sm font-medium truncate">{{ p.name }}</p>
-              <p class="text-mint-600 text-sm font-bold">¥{{ p.price }}</p>
-              <p class="text-[10px] text-gray-400">{{ p.kind === 'refurbished' ? '✨ 翻新二手' : '🎨 社团改造' }}</p>
-            </div>
+        <div class="section-heading"><div><p class="eyebrow mb-2">FRESH FINDS</p><h2 class="section-title">新近焕新</h2></div><router-link to="/shop" class="text-xs text-mint-700">浏览全部 ↗</router-link></div>
+        <div class="grid grid-cols-2 gap-4">
+          <router-link v-for="p in latest" :key="p.id" to="/shop" class="latest-card">
+            <img v-if="p.image_after" :src="p.image_after" :alt="p.name" loading="lazy" />
+            <div v-else class="latest-placeholder"><span>RE / NEW</span></div>
+            <div class="flex justify-between items-start gap-2 mt-3"><h3 class="text-sm font-medium truncate">{{ p.name }}</h3><span class="text-sm font-semibold">¥{{ p.price }}</span></div>
+            <p class="text-[11px] text-gray-500 mt-1">{{ p.kind === 'refurbished' ? '翻新二手' : '社团改造' }}</p>
           </router-link>
-          <p v-if="!latest.length" class="text-sm text-gray-400 col-span-2 text-center py-4">暂无商品</p>
+          <p v-if="!latest.length" class="empty-state col-span-2">好物正在准备中。<router-link to="/recycle" class="underline">投稿一件闲置</router-link>，开启它的新故事。</p>
         </div>
       </div>
-
-      <!-- 环保积分排行榜 -->
       <div>
-        <h2 class="font-bold text-mint-700 mb-3">🏅 环保积分榜</h2>
-        <div class="card space-y-2.5">
-          <div v-for="(u, i) in leaders" :key="i" class="flex items-center gap-2.5">
-            <span class="w-6 text-center text-sm font-bold"
-              :class="i === 0 ? 'text-amber-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-amber-700' : 'text-gray-300'">
-              {{ ['🥇', '🥈', '🥉'][i] ?? i + 1 }}
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm truncate">{{ u.nickname || '神秘同学' }}</p>
-              <p class="text-[10px] text-gray-400">{{ levelName(u.points) }}</p>
-            </div>
-            <span class="text-sm font-bold text-mint-600">{{ u.points }}</span>
+        <div class="section-heading"><div><p class="eyebrow mb-2">SMALL ACTIONS, REAL IMPACT</p><h2 class="section-title">校园循环伙伴</h2></div></div>
+        <div class="leaderboard">
+          <div v-for="(u, i) in leaders" :key="i" class="leader-row">
+            <span class="rank-number">{{ String(i + 1).padStart(2, '0') }}</span>
+            <div class="min-w-0 flex-1"><p class="text-sm truncate">{{ u.nickname || '神秘同学' }}</p><p class="text-[10px] text-gray-500 mt-1">{{ levelName(u.points) }}</p></div>
+            <strong class="text-sm">{{ u.points }}<small class="font-normal ml-1 text-gray-500">分</small></strong>
           </div>
-          <p v-if="!leaders.length" class="text-sm text-gray-400 text-center py-2">虚位以待，投稿闲置即可上榜！</p>
-          <p class="text-[11px] text-gray-400 pt-1 border-t border-gray-50">投稿闲置 +10 分 · 购买改造好物 +5 分</p>
+          <p v-if="!leaders.length" class="text-sm text-gray-500 py-6">第一位循环伙伴，虚位以待。</p>
+          <p class="text-[11px] text-gray-500 border-t border-[#e1e5da] pt-4 mt-2">投稿 +10 分 · 购买意向 +5 分</p>
         </div>
       </div>
     </section>
 
-    <!-- 平台运营流程（答辩用） -->
-    <section class="mt-8">
-      <h2 class="font-bold text-mint-700 mb-3">🔄 一件闲置的新生之旅</h2>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="card !p-4">
-          <p class="text-2xl">📥</p>
-          <h3 class="text-sm font-medium mt-1.5">① 汇聚旧货</h3>
-          <p class="text-xs text-gray-500 mt-1">同学投稿闲置，或平台线下进货收购</p>
-        </div>
-        <div class="card !p-4">
-          <p class="text-2xl">🔍</p>
-          <h3 class="text-sm font-medium mt-1.5">② 管理员筛选</h3>
-          <p class="text-xs text-gray-500 mt-1">清洁翻新后直接上架，或开放给社团认领</p>
-        </div>
-        <div class="card !p-4">
-          <p class="text-2xl">🎨</p>
-          <h3 class="text-sm font-medium mt-1.5">③ 社团改造</h3>
-          <p class="text-xs text-gray-500 mt-1">DIY 社团认领旧货，二次创作成创意好物</p>
-        </div>
-        <div class="card !p-4">
-          <p class="text-2xl">🛒</p>
-          <h3 class="text-sm font-medium mt-1.5">④ 焕新上架</h3>
-          <p class="text-xs text-gray-500 mt-1">翻新二手与改造成品，一起在商城等你</p>
+    <section id="about" class="journey-section">
+      <div class="section-heading"><div><p class="eyebrow mb-2">THE SECOND CHAPTER</p><h2 class="section-title">一件闲置的新生之旅</h2></div><span class="text-xs text-gray-500">从你的宿舍，到另一个人的日常</span></div>
+      <div class="journey-grid">
+        <div v-for="(step, i) in [{ title: '汇聚闲置', copy: '拍下不再使用的物品，让它被重新看见。' }, { title: '用心筛选', copy: '管理员检查物品，选择翻新或社团改造。' }, { title: '赋予新意', copy: '校园 DIY 创作者动手，为旧物添一份巧思。' }, { title: '继续被喜欢', copy: '带回一件焕新好物，让循环融入日常。' }]" :key="step.title">
+          <span class="eyebrow">0{{ i + 1 }} <span class="float-right" aria-hidden="true">↗</span></span><h3 class="text-base font-semibold mt-5">{{ step.title }}</h3><p class="text-xs text-gray-500 leading-6 mt-2">{{ step.copy }}</p>
         </div>
       </div>
+      <p class="text-[11px] text-gray-500 mt-6 leading-6">「宿舍焕新」连接校园闲置回收与 DIY 改造。本项目为国创赛演示，商城仅收集购买意向，不含真实支付。好友与家园亲密度为本机演示数据。</p>
     </section>
-
-    <!-- 关于项目 -->
-    <section id="about" class="card mt-8">
-      <h2 class="font-bold text-mint-700 mb-2">关于项目</h2>
-      <p class="text-sm text-gray-600 leading-relaxed">
-        「宿舍焕新」是一个校园低碳循环项目：同学们投稿闲置物品，DIY 社团将其改造为宿舍好物并在改造商城展示。
-        商城里有两类好物：管理员筛选翻新后的二手物品，以及 DIY 社团改造创作的创意成品。
-        你可以点击上方 3D 宿舍中的床、书桌、置物架等区域，查看对应位置的改造灵感与商品。
-        本站为演示 Demo，商城仅支持「提交购买意向」，不含真实支付。
-      </p>
-    </section>
+    <ProductDrawer :visible="drawerVisible" :zone-key="zoneKey" :zone-label="zoneLabel" @close="drawerVisible = false" />
   </div>
 </template>
+
+<style scoped>
+.home-intro { display: grid; grid-template-columns: 1fr 260px; align-items: center; gap: 56px; padding: 60px 0 44px; }
+.home-intro h1 { font-size: clamp(32px, 4vw, 52px); line-height: 1.35; font-weight: 600; letter-spacing: -.055em; }
+.home-intro h1 span { color: #567b58; }
+.intro-copy { font-size: 13px; line-height: 1.9; color: #7a8379; margin-top: 20px; }
+.intro-note { align-self: stretch; border-radius: 140px 140px 8px 8px; background: #e5e9db; padding: 60px 28px 26px; display: flex; flex-direction: column; justify-content: space-between; position: relative; }
+.intro-note::after { content: ''; position: absolute; width: 80px; height: 80px; border: 1px solid #bac7ae; border-radius: 50%; top: 22px; right: 30px; }
+.note-index { font-size: 8px; letter-spacing: .1em; color: #7f8c70; }
+.intro-note p { font-size: 30px; font-weight: 300; line-height: 1.6; margin: 18px 0; }
+.note-bottom { font-size: 10px; color: #718476; }
+.impact-strip { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #d9dfd3; border-bottom: 1px solid #d9dfd3; padding: 25px 0; }
+.impact-strip > div { display: flex; align-items: center; gap: 18px; padding: 0 24px; border-right: 1px solid #d9dfd3; }
+.impact-strip > div:first-child { padding-left: 0; }
+.impact-strip > div:last-child { border: 0; }
+.impact-strip strong { font-size: 30px; letter-spacing: -.06em; font-weight: 500; white-space: nowrap; }
+.impact-strip small { font-size: 14px; }
+.impact-strip span { font-size: 11px; color: #7a8379; }
+.section-heading { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: end; margin-bottom: 22px; }
+.room-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; border: 1px solid #dce2d4; border-radius: 18px; overflow: hidden; background: #edf0e5; }
+.room-stage { height: 560px; min-width: 0; }
+.room-panel { padding: 30px 24px; background: #f0f1e8; border-left: 1px solid #dce2d4; }
+.level-label { font-size: 11px; border: 1px solid #bdcbb5; padding: 3px 8px; border-radius: 4px; }
+.panel-divider { border-top: 1px solid #d9dfd3; margin: 24px 0; }
+.friend-button { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; font-size: 11px; border: 1px solid #d2dacb; padding: 11px; border-radius: 6px; text-align: left; }
+.friend-button.selected { background: #e0e8d8; border-color: #829a79; }
+.latest-card { padding-bottom: 12px; }
+.latest-card img, .latest-placeholder { width: 100%; height: 180px; object-fit: cover; border-radius: 10px; background: #e9ebdf; transition: filter .2s; }
+.latest-card:hover img { filter: brightness(.96); }
+.latest-placeholder { display: grid; place-items: center; color: #9aa88f; font-size: 18px; letter-spacing: .25em; }
+.leaderboard { padding: 8px 22px 22px; background: #edeee5; border-radius: 12px; }
+.leader-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; }
+.rank-number { color: #97a188; font-size: 18px; font-weight: 300; }
+.journey-section { border-top: 1px solid #d9dfd3; margin-top: 56px; padding-top: 34px; }
+.journey-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; }
+.journey-grid > div { border-top: 1px solid #bfcab8; padding-top: 16px; }
+@media(max-width: 900px) {
+  .room-layout { grid-template-columns: 1fr; }
+  .room-panel { border-left: 0; border-top: 1px solid #dce2d4; }
+  .impact-strip > div { flex-direction: column; align-items: start; gap: 4px; }
+}
+@media(max-width: 640px) {
+  .home-intro { grid-template-columns: 1fr; padding-top: 38px; gap: 24px; }
+  .intro-note { display: none; }
+  .impact-strip > div { padding: 0 10px; }
+  .impact-strip strong { font-size: 26px; }
+  .impact-strip span { font-size: 10px; line-height: 1.7; }
+  .room-stage { height: 440px; }
+  .journey-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+  .latest-card img, .latest-placeholder { height: 145px; }
+}
+</style>

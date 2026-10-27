@@ -3,7 +3,9 @@
  * ProductDrawer —— 侧边滑层商品展示
  * 点击 3D 热区后从右侧（移动端从底部）滑出，展示对应分区的改造商品。
  */
+import { computed, ref, watch } from 'vue'
 import { supabase } from '../lib/supabase'
+import { useModal } from '../composables/useModal'
 import { useAuth } from '../stores/auth'
 
 const props = defineProps({
@@ -12,21 +14,29 @@ const props = defineProps({
   zoneLabel: String,  // 分区中文名
 })
 const emit = defineEmits(['close'])
+const panel = ref(null)
+useModal(computed(() => props.visible), panel, () => emit('close'))
 
 const { user } = useAuth()
 const products = ref([])
 const loading = ref(false)
 const tip = ref('')
+const loadError = ref(false)
+let requestId = 0
 
 // 分区变化或打开时 → 从 Supabase 拉取该分区商品
 watch(() => [props.visible, props.zoneKey], async ([v]) => {
+  const id = ++requestId
+  tip.value = ''
   if (!v || !props.zoneKey) return
   loading.value = true
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('products')
     .select('*')
     .eq('zone', props.zoneKey)
     .order('created_at', { ascending: false })
+  if (id !== requestId) return
+  loadError.value = Boolean(error)
   products.value = data ?? []
   loading.value = false
 })
@@ -57,18 +67,19 @@ async function buy(p) {
 
   <!-- 滑层：桌面端右侧抽屉，移动端底部弹层 -->
   <Transition name="slide">
-    <aside v-if="visible"
+    <aside ref="panel" tabindex="-1" v-if="visible" role="dialog" aria-modal="true" :aria-label="zoneLabel + '改造灵感'"
       class="fixed z-50 bg-cream shadow-2xl overflow-y-auto
              inset-x-0 bottom-0 max-h-[75vh] rounded-t-3xl
              md:inset-y-0 md:right-0 md:left-auto md:w-[420px] md:max-h-none md:rounded-none md:rounded-l-3xl">
       <header class="sticky top-0 bg-cream/95 backdrop-blur flex items-center justify-between px-5 py-4 border-b border-mint-100">
         <h3 class="font-bold text-mint-700 text-lg">🛠️ {{ zoneLabel }} · 改造灵感</h3>
-        <button class="text-gray-400 hover:text-gray-600 text-xl leading-none" @click="emit('close')">✕</button>
+        <button aria-label="关闭分区商品" class="text-gray-400 hover:text-gray-600 text-xl leading-none" @click="emit('close')">✕</button>
       </header>
 
       <p v-if="tip" class="mx-5 mt-3 text-sm bg-mint-100 text-mint-700 rounded-xl px-4 py-2.5">{{ tip }}</p>
 
       <div v-if="loading" class="p-8 text-center text-gray-400">加载中…</div>
+      <p v-else-if="loadError" role="alert" class="p-8 text-sm text-gray-500">该分区暂时未能加载，请关闭后重试。</p>
       <div v-else-if="!products.length" class="p-8 text-center text-gray-400">该分区暂无改造商品，敬请期待 🌱</div>
 
       <!-- 商品卡片：改造前后对比图 + 设计理念 + 价格 -->

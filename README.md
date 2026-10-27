@@ -167,3 +167,15 @@
 ---
 
 *本项目为国创赛演示 Demo，商城仅支持「提交购买意向」，不含真实支付。*
+
+## UI 与家园升级（功能分支）
+
+本次界面、3D 素材授权、验证和部署说明见 [docs/ui-upgrade.md](docs/ui-upgrade.md)。
+
+```sh
+npm ci
+npm test
+npm run build
+```
+
+Netlify 已提供 `netlify.toml`（构建命令 `npm run build`，发布目录 `dist`），继续使用现有 `public/_redirects` 支持刷新路由。请在托管平台配置已有的两项 Supabase 环境变量；`.env.example` 仅包含占位符。先预览功能分支，再发布到确认的站点。
