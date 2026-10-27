@@ -29,3 +29,6 @@
 - `npm run build` / equivalent `node node_modules/vite/bin/vite.js build`: passes. Vite warns about the Three.js home chunk exceeding 500 kB (about 610 kB / 163 kB gzip); it is route-loaded and not a build failure.
 - Browser checks with an isolated local read-only fixture backend: search, type and zone filters, ascending price, detail/story/process placeholders, logged-out favorite/purchase protection, Escape closing, 390 px mobile layout without page overflow, and home theme/model/partner/zone controls.
 - Separate disconnected-backend preview verifies graceful catalog failure handling. No real login, live Supabase writes, admin workflow or production credentials were available during these local checks.
+
+## Preview startup repair
+Missing or invalid Supabase build settings now produce an explicit disconnected-preview notice instead of a module-initialization crash. The fallback performs no network calls, cannot sign in, and returns CONFIG_MISSING for every query or write. Configured deployments continue using the real Supabase client. Four startup regression tests were added (7 total tests). Hosting settings must still provide the existing Supabase values for Deploy Previews to enable real data and login.

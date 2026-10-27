@@ -1,4 +1,5 @@
 <script setup>
+import { supabaseConfigured } from './lib/supabase'
 import { useAuth } from './stores/auth'
 const { user, role, nickname, isAdmin, isMember } = useAuth()
 const ROLE_TEXT = { student: '学生', member: '社团', admin: '管理员' }
@@ -29,6 +30,7 @@ const ROLE_TEXT = { student: '学生', member: '社团', admin: '管理员' }
         </div>
       </nav>
     </header>
+    <p v-if="!supabaseConfigured" role="status" class="page-shell w-full py-4 text-sm text-mint-700">当前可预览界面和 3D 家园；本站的数据服务尚未连接，商品、登录及保存功能暂不可用。</p>
     <main id="main-content" class="flex-1" tabindex="-1"><router-view /></main>
     <footer class="site-footer">
       <div class="page-shell flex flex-wrap justify-between gap-4">
